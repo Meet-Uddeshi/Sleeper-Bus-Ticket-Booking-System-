@@ -1,0 +1,8 @@
+fastapi
+uvicorn
+supabase
+pydantic
+pydantic-settings
+loguru
+python-dotenv
+routers

@@ -1,0 +1,7 @@
+.venv
+__pycache__
+database
+*/model.pkl
+*/.env.example
+.env
+logs
