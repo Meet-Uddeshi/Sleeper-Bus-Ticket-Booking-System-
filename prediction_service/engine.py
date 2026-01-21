@@ -1,90 +1,90 @@
-import joblib
-import pandas as pd
-import os
+import hashlib
 from datetime import date
 from common.logger import logger
-import random
 
 class PredictionEngine:
     def __init__(self, model_path: str = "model.pkl"):
+        # We are using a simulated deterministic model, so we don't load a physical file.
         self.model_path = model_path
-        self.model = None
 
     @staticmethod
     def load_model():
-        # Mock loading - doing nothing is fine for now
-        print("Mock Model 'loaded' successfully.")
+        logger.info("Deterministic Random Forest Simulator loaded successfully.")
 
-    def predict(self, travel_date: date, start_station_order: int, end_station_order: int):
+    def predict(self, travel_date: date, start_station_order: int, end_station_order: int) -> dict:
         """
-        Runs the prediction logic.
+        Main entry point for the API.
+        Delegates to the deterministic logic engine.
         """
-        if not self.model:
-            # For now, allow running without model if we use the static method logic primarily
-            # But the user code calls predict().
-            # Let's fallback to predict_confirmation logic if model is missing, or raise.
-            # The original code raised ValueError.
-            # But the user changed load_model to do nothing.
-            # So self.model will be None.
-            # If self.model is None, this method will raise "Model not loaded".
-            # This seems to be a bug introduced by the user mocking load_model but not updating predict.
-            # I should fix this to use the new logic if model is missing.
-            pass
-
-        # Feature Engineering (Same logic as before, now encapsulated)
-        today = date.today()
-        days_before = (travel_date - today).days
-        if days_before < 0: days_before = 0 
+        # Convert date to string for consistency in hashing
+        date_str = travel_date.isoformat()
         
-        is_weekend = 1 if travel_date.weekday() >= 5 else 0
-        
-        segment_length = end_station_order - start_station_order
-        if segment_length <= 0:
-            segment_length = 1 
-            
-        occupancy = 0.5 # Mock value
-        
-        features = pd.DataFrame([[days_before, is_weekend, segment_length, occupancy]], 
-                                columns=['days_before_travel', 'is_weekend', 'segment_length', 'current_bus_occupancy'])
-        
-        # Predict
-        if self.model:
-            try:
-                prob = self.model.predict_proba(features)[0][1] # Probability of class 1
-            except Exception as e:
-                 raise ValueError(f"Prediction failed: {e}")
-        else:
-            # Fallback to new math logic if model is not loaded (mock mode)
-            prob = PredictionEngine.predict_confirmation(start_station_order, end_station_order, travel_date.weekday()) / 100.0
-
-        prob_percentage = round(prob * 100, 2)
-        
-        demand_level = "Low"
-        if prob_percentage > 75:
-            demand_level = "High"
-        elif prob_percentage > 40:
-            demand_level = "Medium"
-            
-        return {
-            "confirmation_probability": prob_percentage,
-            "demand_level": demand_level
-        }
+        return self.calculate_deterministic_score(
+            start_seq=start_station_order,
+            end_seq=end_station_order,
+            travel_date_str=date_str,
+            travel_date_obj=travel_date
+        )
 
     @staticmethod
-    def predict_confirmation(start_seq: int, end_seq: int, day_of_week: int) -> float:
+    def calculate_deterministic_score(start_seq: int, end_seq: int, travel_date_str: str, travel_date_obj: date) -> dict:
         """
-        Pure math logic, no file loading required.
+        Simulates a trained Random Forest Regressor with DETERMINISTIC output.
+        
+        The 'randomness' is derived from a SHA-256 hash of the inputs.
+        This ensures that the same Date + Route ALWAYS produces the same result.
         """
-        base_prob = 75.0
         
-        # Logic: Longer distance = Higher commitment
-        distance_factor = (end_seq - start_seq) * 3 
+        # 1. Feature Engineering
+        day_of_week = travel_date_obj.weekday() # 0=Mon, 6=Sun
+        month = travel_date_obj.month
+        distance = abs(end_seq - start_seq)
+
+        # 2. Base "Model" Weights (Simulating Learned Coefficients)
+        # Start with a base probability (Intercept)
+        score = 60.0
+
+        # WEIGHT A: Weekends are busier (Fri=4, Sat=5, Sun=6)
+        if day_of_week in [4, 6]: 
+            score += 15.0  # High demand spike on Fri/Sun
+        elif day_of_week == 5:
+            score += 5.0   # Moderate on Saturday
+        else:
+            score -= 5.0   # Lower on weekdays
+
+        # WEIGHT B: Long Distance trips are booked more seriously (Lower cancellation)
+        score += (distance * 3.0) 
+
+        # WEIGHT C: Seasonality (Peak months: Dec, Jan, May)
+        if month in [12, 1, 5]:
+            score += 10.0
+
+        # 3. Deterministic Noise (The Core "Same Demand" Logic)
+        # We create a unique signature string for this specific trip
+        input_signature = f"{start_seq}-{end_seq}-{travel_date_str}"
         
-        # Logic: Weekend (5=Sat, 6=Sun) is busier
-        weekend_factor = 10 if day_of_week in [5, 6] else 0
+        # Hash it to get a consistent "random" number
+        hash_object = hashlib.sha256(input_signature.encode('utf-8'))
+        hash_hex = hash_object.hexdigest()
         
-        # Add randomness
-        probability = base_prob + distance_factor + weekend_factor + random.uniform(-5, 5)
+        # Convert first 4 chars of hash to an integer to generate consistent noise (-5.0 to +5.0)
+        hash_val = int(hash_hex[:4], 16) 
+        deterministic_noise = (hash_val % 100) / 10.0 - 5.0
         
-        # Clamp between 0 and 100
-        return min(max(probability, 5.0), 99.0)
+        final_score = score + deterministic_noise
+
+        # 4. Clamping (Keep within realistic 10% - 98% range)
+        final_score = min(max(final_score, 10.0), 98.5)
+
+        # 5. Classification
+        if final_score > 80:
+            demand = "High"
+        elif final_score > 55:
+            demand = "Medium"
+        else:
+            demand = "Low"
+
+        return {
+            "confirmation_probability": round(final_score, 1),
+            "demand_level": demand
+        }

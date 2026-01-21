@@ -58,6 +58,23 @@ def get_my_bookings():
     except:
         return []
 
+# --- ADDED: Prediction Helper Function ---
+def get_prediction(date_obj, start_order, end_order):
+    try:
+        payload = {
+            "travel_date": date_obj.isoformat(),
+            "start_station_order": start_order,
+            "end_station_order": end_order
+        }
+        # Note: Prediction service runs on port 8001
+        response = requests.post(f"{PREDICTION_API_URL}/predict", json=payload)
+        if response.status_code == 200:
+            return response.json()
+        else:
+            return {"confirmation_probability": 0, "demand_level": "Unknown"}
+    except Exception as e:
+        return {"confirmation_probability": 0, "demand_level": f"Error"}
+
 def toggle_seat(seat_id, seat_number, deck_type, max_seats):
     """
     Handles seat selection with a limit based on passenger count.
@@ -130,6 +147,26 @@ if page == "Search & Book":
 
         # Logic: Only show grid if search was performed
         if st.session_state.get('search_performed'):
+            
+            # --- ADDED: PREDICTION DISPLAY ---
+            st.divider()
+            st.subheader("📊 Demand Forecast")
+            
+            # Call Prediction API
+            pred = get_prediction(t_date, start_node['sequence_order'], end_node['sequence_order'])
+            
+            p1, p2 = st.columns(2)
+            p1.metric("Booking Probability", f"{pred['confirmation_probability']}%")
+            p2.metric("Demand Level", pred['demand_level'])
+            
+            if pred['demand_level'] == "High":
+                st.warning("🔥 High Demand! Book fast.")
+            elif pred['demand_level'] == "Medium":
+                st.info("⚠️ Moderate demand.")
+            else:
+                st.success("✅ Good availability.")
+            # ---------------------------------
+
             available_seats = st.session_state.cached_available_seats
             available_count = len(available_seats)
             
@@ -139,7 +176,7 @@ if page == "Search & Book":
             if available_count < num_passengers:
                 st.error(f"❌ Not enough seats! You requested {num_passengers}, but only {available_count} are available.")
             else:
-                st.success(f"✅ {available_count} Seats Available. Please select exactly {num_passengers} seat(s).")
+                st.markdown(f"### 💺 Select Seats ({len(st.session_state.selected_seats)}/{num_passengers})")
                 
                 # --- 3. Seat Grid ---
                 # Map available seats for lookup
@@ -149,7 +186,7 @@ if page == "Search & Book":
                 
                 # Lower Deck Render
                 with col_lower:
-                    st.markdown("### Lower Deck")
+                    st.markdown("#### Lower Deck")
                     cols = st.columns(5)
                     for i in range(1, 11):
                         seat_num = f"L{i}"
@@ -168,7 +205,7 @@ if page == "Search & Book":
 
                 # Upper Deck Render
                 with col_upper:
-                    st.markdown("### Upper Deck")
+                    st.markdown("#### Upper Deck")
                     cols = st.columns(5)
                     for i in range(1, 11):
                         seat_num = f"U{i}"
