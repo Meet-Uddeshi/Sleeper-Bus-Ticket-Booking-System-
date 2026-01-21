@@ -50,9 +50,6 @@ Sleeper-Bus-Ticket-Booking-System/
 ├── common/                    # Shared Library
 │   ├── config.py              # Centralized Settings (Pydantic)
 │   └── logger.py              # Centralized Logging (Loguru)
-│
-├── .venv/                     # Virtual Environment
-├── .env                       # Environment Variables
 ├── requirements.txt           # Dependencies
 ├── run_app.bat                # Startup Script (Windows)
 └── README.md                  # Documentation
