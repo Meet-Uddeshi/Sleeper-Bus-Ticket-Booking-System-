@@ -113,6 +113,11 @@ flowchart TD
    SUPABASE_KEY=your_supabase_anon_key
    SERVICE_NAME=booking-system
    ```
+5. **Initialize Model**:
+   Run the training script to generate/download the model file (`model.pkl`):
+   ```bash
+   python prediction_service/train_model.py
+   ```
 
 ### Running the Services
 
