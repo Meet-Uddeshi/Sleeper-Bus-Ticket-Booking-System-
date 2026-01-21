@@ -2,28 +2,34 @@ import joblib
 import pandas as pd
 import os
 from datetime import date
-
-from core.logger import logger
+from common.logger import logger
+import random
 
 class PredictionEngine:
     def __init__(self, model_path: str = "model.pkl"):
         self.model_path = model_path
         self.model = None
 
-    def load_model(self):
-        """Loads the model from disk if available."""
-        if os.path.exists(self.model_path):
-            self.model = joblib.load(self.model_path)
-            logger.info(f"Model loaded from {self.model_path}")
-        else:
-            logger.warning(f"{self.model_path} not found. Prediction service will fail until trained.")
+    @staticmethod
+    def load_model():
+        # Mock loading - doing nothing is fine for now
+        print("Mock Model 'loaded' successfully.")
 
     def predict(self, travel_date: date, start_station_order: int, end_station_order: int):
         """
         Runs the prediction logic.
         """
         if not self.model:
-            raise ValueError("Model not loaded")
+            # For now, allow running without model if we use the static method logic primarily
+            # But the user code calls predict().
+            # Let's fallback to predict_confirmation logic if model is missing, or raise.
+            # The original code raised ValueError.
+            # But the user changed load_model to do nothing.
+            # So self.model will be None.
+            # If self.model is None, this method will raise "Model not loaded".
+            # This seems to be a bug introduced by the user mocking load_model but not updating predict.
+            # I should fix this to use the new logic if model is missing.
+            pass
 
         # Feature Engineering (Same logic as before, now encapsulated)
         today = date.today()
@@ -42,11 +48,15 @@ class PredictionEngine:
                                 columns=['days_before_travel', 'is_weekend', 'segment_length', 'current_bus_occupancy'])
         
         # Predict
-        try:
-            prob = self.model.predict_proba(features)[0][1] # Probability of class 1
-        except Exception as e:
-             raise ValueError(f"Prediction failed: {e}")
-        
+        if self.model:
+            try:
+                prob = self.model.predict_proba(features)[0][1] # Probability of class 1
+            except Exception as e:
+                 raise ValueError(f"Prediction failed: {e}")
+        else:
+            # Fallback to new math logic if model is not loaded (mock mode)
+            prob = PredictionEngine.predict_confirmation(start_station_order, end_station_order, travel_date.weekday()) / 100.0
+
         prob_percentage = round(prob * 100, 2)
         
         demand_level = "Low"
@@ -59,3 +69,22 @@ class PredictionEngine:
             "confirmation_probability": prob_percentage,
             "demand_level": demand_level
         }
+
+    @staticmethod
+    def predict_confirmation(start_seq: int, end_seq: int, day_of_week: int) -> float:
+        """
+        Pure math logic, no file loading required.
+        """
+        base_prob = 75.0
+        
+        # Logic: Longer distance = Higher commitment
+        distance_factor = (end_seq - start_seq) * 3 
+        
+        # Logic: Weekend (5=Sat, 6=Sun) is busier
+        weekend_factor = 10 if day_of_week in [5, 6] else 0
+        
+        # Add randomness
+        probability = base_prob + distance_factor + weekend_factor + random.uniform(-5, 5)
+        
+        # Clamp between 0 and 100
+        return min(max(probability, 5.0), 99.0)

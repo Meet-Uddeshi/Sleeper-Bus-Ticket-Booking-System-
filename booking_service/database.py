@@ -1,6 +1,6 @@
 from supabase import create_client, Client
-from booking_service.core.config import settings
-from booking_service.core.logger import logger
+from common.config import settings
+from common.logger import logger
 
 url: str = settings.SUPABASE_URL
 key: str = settings.SUPABASE_KEY

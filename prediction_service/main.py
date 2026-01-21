@@ -1,8 +1,8 @@
 from fastapi import FastAPI, HTTPException, Depends
 from pydantic import BaseModel
 from datetime import date
-from engine import PredictionEngine
-from core.logger import logger
+from prediction_service.engine import PredictionEngine
+from common.logger import logger
 
 app = FastAPI(title="Demand Prediction Service")
 

@@ -4,7 +4,7 @@ from datetime import date
 from pydantic import UUID4
 from booking_service.schemas import Station, Seat, Meal, BookingRequest, BookingResponse
 from booking_service.services.booking_logic import BookingService
-from booking_service.core.logger import logger
+from common.logger import logger
 router = APIRouter()
 
 @router.get("/stations", response_model=List[Station])
@@ -17,11 +17,20 @@ def get_meals():
     logger.debug("Fetching meals")
     return BookingService.get_meals()
 
-@router.get("/bookings")
+@router.get("/bookings", response_model=List[BookingResponse])
 def get_bookings():
-    logger.debug("Fetching all bookings")
-    return BookingService.get_bookings()
-
+    bookings_data = BookingService.get_bookings()
+    
+    # Map raw DB data to Pydantic model
+    return [
+        BookingResponse(
+            booking_id=b['id'],
+            status=b['status'],
+            message="Retrieved",
+            total_amount=0.0 # Placeholder
+        ) for b in bookings_data
+    ]
+    
 @router.get("/seats", response_model=List[Seat])
 def get_seats(
     from_station: UUID4, 
@@ -53,5 +62,24 @@ def cancel_booking(booking_id: UUID4):
         return {"message": "Booking cancelled successfully"}
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/bookings", response_model=List[BookingResponse]) # Adjust schema if needed
+def get_all_bookings():
+    """
+    Fetch all bookings for the 'My Bookings' page.
+    Note: In a real app, this would filter by the logged-in User ID.
+    """
+    try:
+        data = BookingService.get_bookings()
+        return [
+            BookingResponse(
+                booking_id=item['id'],
+                status=item['status'],
+                message="Retrieved",
+                total_amount=0.0 # Calculate real amount if you have price logic
+            ) for item in data
+        ]
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
